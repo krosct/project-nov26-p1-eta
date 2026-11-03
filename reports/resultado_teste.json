@@ -1,0 +1,25 @@
+{
+  "modelo_final": "lightgbm",
+  "n_dev": 36612,
+  "n_teste": 8981,
+  "teste": {
+    "mae": 3.161,
+    "rmse": 3.986,
+    "r2": 0.821
+  },
+  "importancia_gain": {
+    "Type_of_vehicle": 0.001,
+    "Type_of_order": 0.001,
+    "dia_semana": 0.003,
+    "City": 0.009,
+    "hora_pedido": 0.01,
+    "Festival": 0.03,
+    "Vehicle_condition": 0.084,
+    "Delivery_person_Age": 0.095,
+    "distancia_km": 0.103,
+    "multiple_deliveries": 0.122,
+    "Road_traffic_density": 0.16,
+    "Weatherconditions": 0.162,
+    "Delivery_person_Ratings": 0.22
+  }
+}

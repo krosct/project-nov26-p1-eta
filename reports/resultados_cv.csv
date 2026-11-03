@@ -1,0 +1,6 @@
+experimento,descricao,mae_cv,mae_cv_std,rmse_cv,r2_cv
+baseline_media,prevê sempre a média,7.586,0.084,9.376,-0.0
+baseline_linear,regressão linear + imputação + one-hot,4.832,0.051,6.077,0.58
+lightgbm,todas as features,3.126,0.02,3.946,0.823
+lightgbm_sem_multiplas,sem multiple_deliveries,3.232,0.017,4.069,0.812
+lightgbm_sem_perfil,sem idade e nota do entregador,4.361,0.028,5.569,0.647
