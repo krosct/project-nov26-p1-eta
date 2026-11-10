@@ -2,14 +2,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from project_nov26_p1_eta.api import app, get_model
-from project_nov26_p1_eta.features import FEATURES
+from project_nov26_p1_eta.features import FEATURES_MODELO
 
 
 class ModeloFalso:
     """Substitui o modelo treinado: o teste verifica o contrato da API, não a qualidade."""
 
     def predict(self, X):
-        assert list(X.columns) == FEATURES
+        assert list(X.columns) == FEATURES_MODELO
         return [30.04] * len(X)
 
 
@@ -27,7 +27,6 @@ PEDIDO = {
     "condicao_veiculo": 2,
     "cidade": "Urban",
     "idade_entregador": 37,
-    "nota_entregador": 4.9,
     "entregas_multiplas": 0,
 }
 
@@ -49,8 +48,14 @@ def test_predict_ok(client):
     assert r.json() == {"eta_min": 30.0}
 
 
+def test_nota_do_entregador_nao_influencia_o_modelo(client):
+    # A nota saiu do contrato da API: se vier, é ignorada em vez de chegar ao modelo
+    r = client.post("/predict", json={**PEDIDO, "nota_entregador": 4.9})
+    assert r.status_code == 200
+
+
 def test_campos_opcionais_ausentes(client):
-    pedido = {k: v for k, v in PEDIDO.items() if k not in {"idade_entregador", "nota_entregador"}}
+    pedido = {k: v for k, v in PEDIDO.items() if k not in {"idade_entregador"}}
     assert client.post("/predict", json=pedido).status_code == 200
 
 
@@ -59,7 +64,7 @@ def test_campos_opcionais_ausentes(client):
     [
         ("clima", "Tornado"),
         ("restaurante_lat", 500),
-        ("nota_entregador", 6),
+        ("idade_entregador", 10),
         ("hora_pedido", "25h"),
     ],
 )

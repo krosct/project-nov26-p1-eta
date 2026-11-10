@@ -28,6 +28,11 @@ NUMERICAS_BASE = [
 ]
 NUMERICAS = NUMERICAS_BASE + ["distancia_km", "hora_pedido", "dia_semana"]
 FEATURES = NUMERICAS + list(CATEGORICAS)
+# A nota do entregador varia pedido a pedido dentro do mesmo ID e pode ser a avaliação da própria
+# entrega, que só existe depois dela (mesmo problema de `Time_Order_picked`). Sem garantia de que
+# é conhecida na hora do pedido, fica fora do modelo principal (só na análise de sensibilidade).
+FEATURE_SUSPEITA = "Delivery_person_Ratings"
+FEATURES_MODELO = [c for c in FEATURES if c != FEATURE_SUSPEITA]
 
 
 def haversine_km(lat1, lon1, lat2, lon2):
@@ -50,7 +55,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     )
     hora = pd.to_datetime(df["Time_Orderd"], format="%H:%M:%S", errors="coerce")
     X["hora_pedido"] = hora.dt.hour
-    X["dia_semana"] = df["Order_Date"].dt.dayofweek
+    X["dia_semana"] = df["Order_Date"].dt.day_of_week
     for col in NUMERICAS_BASE:
         X[col] = df[col]
     for col, cats in CATEGORICAS.items():

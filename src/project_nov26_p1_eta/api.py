@@ -13,7 +13,7 @@ import pandas as pd
 from fastapi import Depends, FastAPI
 from pydantic import BaseModel, Field
 
-from project_nov26_p1_eta.features import build_features
+from project_nov26_p1_eta.features import FEATURES_MODELO, build_features
 
 app = FastAPI(
     title="ETA de entregas",
@@ -37,7 +37,6 @@ class Pedido(BaseModel):
     cidade: Literal["Urban", "Metropolitian", "Semi-Urban"]
     festival: bool = False
     idade_entregador: float | None = Field(default=None, ge=15, le=70)
-    nota_entregador: float | None = Field(default=None, ge=1, le=5)
     entregas_multiplas: int | None = Field(default=None, ge=0, le=3)
 
 
@@ -62,7 +61,7 @@ def pedido_para_dataframe(pedido: Pedido) -> pd.DataFrame:
         "City": pedido.cidade,
         "Festival": "Yes" if pedido.festival else "No",
         "Delivery_person_Age": pedido.idade_entregador,
-        "Delivery_person_Ratings": pedido.nota_entregador,
+        "Delivery_person_Ratings": float("nan"),  # fora do modelo (ver features.FEATURE_SUSPEITA)
         "multiple_deliveries": pedido.entregas_multiplas,
     }
     df = pd.DataFrame([linha])
@@ -83,5 +82,5 @@ def health() -> dict:
 
 @app.post("/predict", response_model=Previsao)
 def predict(pedido: Pedido, model: Annotated[object, Depends(get_model)]) -> Previsao:
-    X = build_features(pedido_para_dataframe(pedido))
+    X = build_features(pedido_para_dataframe(pedido))[FEATURES_MODELO]
     return Previsao(eta_min=round(float(model.predict(X)[0]), 1))

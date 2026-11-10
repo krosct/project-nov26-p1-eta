@@ -2,24 +2,57 @@
   "modelo_final": "lightgbm",
   "n_dev": 36612,
   "n_teste": 8981,
+  "features_modelo": [
+    "Delivery_person_Age",
+    "Vehicle_condition",
+    "multiple_deliveries",
+    "distancia_km",
+    "hora_pedido",
+    "dia_semana",
+    "Weatherconditions",
+    "Road_traffic_density",
+    "Type_of_order",
+    "Type_of_vehicle",
+    "Festival",
+    "City"
+  ],
   "teste": {
+    "mae": 3.416,
+    "rmse": 4.267,
+    "r2": 0.795,
+    "mae_ic95": [
+      3.363,
+      3.469
+    ]
+  },
+  "teste_com_nota_sensibilidade": {
     "mae": 3.161,
     "rmse": 3.986,
     "r2": 0.821
+  },
+  "teste_temporal": {
+    "mae": 3.451,
+    "rmse": 4.28,
+    "r2": 0.797
+  },
+  "teste_temporal_info": {
+    "data_corte": "2022-03-29",
+    "n_treino": 36146,
+    "n_teste": 9447,
+    "dias_teste": 9
   },
   "importancia_gain": {
     "Type_of_vehicle": 0.001,
     "Type_of_order": 0.001,
     "dia_semana": 0.003,
-    "City": 0.009,
-    "hora_pedido": 0.01,
-    "Festival": 0.03,
-    "Vehicle_condition": 0.084,
-    "Delivery_person_Age": 0.095,
-    "distancia_km": 0.103,
-    "multiple_deliveries": 0.122,
-    "Road_traffic_density": 0.16,
-    "Weatherconditions": 0.162,
-    "Delivery_person_Ratings": 0.22
+    "hora_pedido": 0.011,
+    "City": 0.011,
+    "Festival": 0.032,
+    "Vehicle_condition": 0.115,
+    "multiple_deliveries": 0.129,
+    "distancia_km": 0.135,
+    "Delivery_person_Age": 0.137,
+    "Weatherconditions": 0.199,
+    "Road_traffic_density": 0.225
   }
 }

@@ -7,6 +7,9 @@ Uso: uv run --group train python scripts/train.py
 3. Registra cada experimento no MLflow.
 4. Treina o modelo escolhido em todo o conjunto de desenvolvimento,
    avalia uma única vez no teste final e salva em models/modelo.joblib.
+5. Teste temporal (treino até a data de corte, teste depois) e IC95 do MAE por bootstrap.
+O modelo principal NÃO usa a nota do entregador (features.FEATURE_SUSPEITA); a versão com a nota
+roda como análise de sensibilidade ("lightgbm_com_nota" e "teste_com_nota").
 """
 
 import json
@@ -14,6 +17,7 @@ from pathlib import Path
 
 import joblib
 import mlflow
+import numpy as np
 import pandas as pd
 from lightgbm import LGBMRegressor
 from sklearn.compose import ColumnTransformer
@@ -29,6 +33,7 @@ from project_nov26_p1_eta.data import load_raw
 from project_nov26_p1_eta.features import (
     CATEGORICAS,
     FEATURES,
+    FEATURES_MODELO,
     GROUP,
     NUMERICAS,
     TARGET,
@@ -38,7 +43,8 @@ from project_nov26_p1_eta.features import (
 SEED = 42
 RAIZ = Path(__file__).resolve().parents[1]
 METRICAS = ["neg_mean_absolute_error", "neg_root_mean_squared_error", "r2"]
-PERFIL_ENTREGADOR = ["Delivery_person_Age", "Delivery_person_Ratings"]
+REAMOSTRAGENS_IC = 2000
+FRACAO_TREINO_TEMPORAL = 0.8  # fração dos DIAS usada no treino do teste temporal
 
 
 def lgbm() -> LGBMRegressor:
@@ -47,17 +53,17 @@ def lgbm() -> LGBMRegressor:
     )
 
 
-def linear() -> object:
+def linear(colunas: list[str]) -> object:
     pre = ColumnTransformer(
         [
-            ("num", SimpleImputer(strategy="median"), NUMERICAS),
+            ("num", SimpleImputer(strategy="median"), [c for c in NUMERICAS if c in colunas]),
             (
                 "cat",
                 make_pipeline(
                     SimpleImputer(strategy="most_frequent"),
                     OneHotEncoder(handle_unknown="ignore"),
                 ),
-                list(CATEGORICAS),
+                [c for c in CATEGORICAS if c in colunas],
             ),
         ]
     )
@@ -66,18 +72,23 @@ def linear() -> object:
 
 # nome -> (modelo, colunas usadas, descrição)
 EXPERIMENTOS = {
-    "baseline_media": (DummyRegressor(strategy="mean"), FEATURES, "prevê sempre a média"),
-    "baseline_linear": (linear(), FEATURES, "regressão linear + imputação + one-hot"),
-    "lightgbm": (lgbm(), FEATURES, "todas as features"),
+    "baseline_media": (DummyRegressor(strategy="mean"), FEATURES_MODELO, "prevê sempre a média"),
+    "baseline_linear": (
+        linear(FEATURES_MODELO),
+        FEATURES_MODELO,
+        "regressão linear + imputação + one-hot",
+    ),
+    "lightgbm": (lgbm(), FEATURES_MODELO, "modelo principal (sem a nota do entregador)"),
+    "lightgbm_com_nota": (lgbm(), FEATURES, "sensibilidade: com a nota do entregador"),
     "lightgbm_sem_multiplas": (
         lgbm(),
-        [c for c in FEATURES if c != "multiple_deliveries"],
+        [c for c in FEATURES_MODELO if c != "multiple_deliveries"],
         "sem multiple_deliveries",
     ),
-    "lightgbm_sem_perfil": (
+    "lightgbm_sem_idade": (
         lgbm(),
-        [c for c in FEATURES if c not in PERFIL_ENTREGADOR],
-        "sem idade e nota do entregador",
+        [c for c in FEATURES_MODELO if c != "Delivery_person_Age"],
+        "sem idade do entregador",
     ),
 }
 FINAL = "lightgbm"
@@ -111,14 +122,50 @@ def main() -> None:
         linhas.append({"experimento": nome, "descricao": descricao, **metricas})
         print(f"{nome:26} MAE {metricas['mae_cv']:.2f} ± {metricas['mae_cv_std']:.2f}")
 
-    final = lgbm().fit(X_dev, y_dev)
-    pred = final.predict(X_teste)
+    final = lgbm().fit(X_dev[FEATURES_MODELO], y_dev)
+    pred = final.predict(X_teste[FEATURES_MODELO])
     teste = {
         "mae": mean_absolute_error(y_teste, pred),
         "rmse": root_mean_squared_error(y_teste, pred),
         "r2": r2_score(y_teste, pred),
     }
-    print(f"Teste final ({FINAL}): MAE {teste['mae']:.2f} | RMSE {teste['rmse']:.2f}")
+    # IC95 do MAE por bootstrap dos pedidos do teste (os erros são calculados uma vez)
+    erros = np.abs(y_teste.to_numpy() - pred)
+    rng = np.random.default_rng(SEED)
+    maes = [erros[rng.integers(0, len(erros), len(erros))].mean() for _ in range(REAMOSTRAGENS_IC)]
+    teste["mae_ic95"] = [float(v) for v in np.percentile(maes, [2.5, 97.5])]
+    # Sensibilidade: mesmo teste, treinando com a nota do entregador
+    com_nota = lgbm().fit(X_dev, y_dev).predict(X_teste)
+    teste_com_nota = {
+        "mae": mean_absolute_error(y_teste, com_nota),
+        "rmse": root_mean_squared_error(y_teste, com_nota),
+        "r2": r2_score(y_teste, com_nota),
+    }
+    print(f"Teste final agrupado ({FINAL}): MAE {teste['mae']:.2f} | RMSE {teste['rmse']:.2f}")
+
+    # Teste temporal (out-of-time): treina nos primeiros 80% dos DIAS e testa nos dias seguintes.
+    # O corte é por data (nenhum dia fica dividido); os IDs de entregador se repetem nos dois lados.
+    dias = np.sort(df["Order_Date"].unique())
+    data_corte = dias[int(len(dias) * FRACAO_TREINO_TEMPORAL)]
+    no_treino = (df["Order_Date"] < data_corte).to_numpy()
+    modelo_temporal = lgbm().fit(X[FEATURES_MODELO][no_treino], y[no_treino])
+    pred_temporal = modelo_temporal.predict(X[FEATURES_MODELO][~no_treino])
+    y_t = y[~no_treino]
+    teste_temporal = {
+        "mae": mean_absolute_error(y_t, pred_temporal),
+        "rmse": root_mean_squared_error(y_t, pred_temporal),
+        "r2": r2_score(y_t, pred_temporal),
+    }
+    info_temporal = {
+        "data_corte": str(pd.Timestamp(data_corte).date()),
+        "n_treino": int(no_treino.sum()),
+        "n_teste": int((~no_treino).sum()),
+        "dias_teste": int(len(dias) - int(len(dias) * FRACAO_TREINO_TEMPORAL)),
+    }
+    print(
+        f"Teste temporal (a partir de {info_temporal['data_corte']}): "
+        f"MAE {teste_temporal['mae']:.2f} | RMSE {teste_temporal['rmse']:.2f}"
+    )
 
     (RAIZ / "models").mkdir(exist_ok=True)
     joblib.dump(final, RAIZ / "models/modelo.joblib")
@@ -126,12 +173,19 @@ def main() -> None:
     reports = RAIZ / "reports"
     reports.mkdir(exist_ok=True)
     pd.DataFrame(linhas).round(3).to_csv(reports / "resultados_cv.csv", index=False)
-    importancia = pd.Series(final.booster_.feature_importance("gain"), index=FEATURES)
+    importancia = pd.Series(final.booster_.feature_importance("gain"), index=FEATURES_MODELO)
     resumo = {
         "modelo_final": FINAL,
         "n_dev": len(idx_dev),
         "n_teste": len(idx_teste),
-        "teste": {k: round(v, 3) for k, v in teste.items()},
+        "features_modelo": FEATURES_MODELO,
+        "teste": {
+            k: ([round(x, 3) for x in v] if isinstance(v, list) else round(v, 3))
+            for k, v in teste.items()
+        },
+        "teste_com_nota_sensibilidade": {k: round(v, 3) for k, v in teste_com_nota.items()},
+        "teste_temporal": {k: round(v, 3) for k, v in teste_temporal.items()},
+        "teste_temporal_info": info_temporal,
         "importancia_gain": (importancia / importancia.sum()).round(3).sort_values().to_dict(),
     }
     (reports / "resultado_teste.json").write_text(json.dumps(resumo, indent=2, ensure_ascii=False))
