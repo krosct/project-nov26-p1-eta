@@ -35,9 +35,9 @@ Tudo dentro de `data/` (exceto este README) é ignorado pelo Git.
 | Coluna | Tipo | Descrição | Disponível na hora do pedido? |
 |---|---|---|---|
 | `ID` | texto | ID do pedido (ex.: `0x4607`) | — (identificador) |
-| `Delivery_person_ID` | texto | ID do entregador. Começa com o código da cidade (ex.: `INDORES13DEL02` → `INDO`) | ✅ (usar para **agrupar** o split) |
+| `Delivery_person_ID` | texto | ID do entregador. Começa com o código da cidade (ex.: `INDORES13DEL02` → `INDO`) | ✅ (agrupa o split, mas **não identifica uma pessoa estável**: 17 idades e 9 notas distintas por ID, em mediana) |
 | `Delivery_person_Age` | número | Idade do entregador | ✅ |
-| `Delivery_person_Ratings` | número | Nota do entregador | ✅ |
+| `Delivery_person_Ratings` | número | Nota do entregador | ⚠️ **Não garantido**: varia pedido a pedido dentro do mesmo ID e pode ser a avaliação da própria entrega; fora do modelo principal |
 | `Restaurant_latitude` / `Restaurant_longitude` | número | Coordenadas do restaurante | ✅ |
 | `Delivery_location_latitude` / `Delivery_location_longitude` | número | Coordenadas da entrega | ✅ |
 | `Order_Date` | data `dd-mm-aaaa` | Data do pedido | ✅ |
@@ -83,5 +83,5 @@ Tudo dentro de `data/` (exceto este README) é ignorado pelo Git.
 ## ⚠️ Decisões de modelagem que dependem dos dados
 
 1. **Vazamento:** `Time_Order_picked` só existe **depois** que o pedido sai do restaurante. Um ETA calculado no momento do pedido não conhece esse valor, então a coluna **fica de fora das features**. Isso inclui qualquer feature derivada dela, como o tempo de espera até a retirada.
-2. **Split agrupado por entregador:** são 1.320 entregadores, com cerca de 41 pedidos cada. Se o mesmo entregador aparece no treino e no teste, o modelo "decora" o entregador e a métrica fica otimista demais. Use `GroupKFold` com `groups=Delivery_person_ID`.
+2. **Split agrupado por entregador:** são 1.320 IDs de entregador, com 34,5 pedidos cada. Se o mesmo ID aparece no treino e no teste, o modelo poderia "decorá-lo"; `GroupKFold` com `groups=Delivery_person_ID` evita isso por cautela (na prática, o MAE é igual ao do split aleatório, porque o ID não é uma pessoa estável).
 3. **Alternativa de split temporal:** como os dados cobrem 44 dias, dá para treinar nos primeiros dias e testar nos últimos, o que simula a produção. Se for usar, documente a escolha no README principal.

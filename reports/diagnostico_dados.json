@@ -1,0 +1,36 @@
+{
+  "identidade_do_id": {
+    "n_ids": 1320,
+    "pedidos_por_id": 34.5,
+    "idades_distintas_por_id_mediana": 17.0,
+    "notas_distintas_por_id_mediana": 9.0,
+    "desvio_nota_dentro_do_id": 0.309,
+    "desvio_nota_total": 0.332
+  },
+  "nota_do_entregador": {
+    "corr_nota_tempo": -0.341,
+    "corr_nota_residuo_do_modelo_sem_nota": -0.204,
+    "mae_cv_sem_nota": 3.39,
+    "mae_cv_com_nota": 3.126,
+    "leitura": "A nota muda pedido a pedido e ainda explica parte do resíduo; não dá para provar que é conhecida na hora do pedido, então fica fora do modelo principal."
+  },
+  "split_agrupado_x_aleatorio": {
+    "mae_cv_agrupado_por_id": 3.39,
+    "mae_cv_aleatorio": 3.392
+  },
+  "calendario": {
+    "dias_com_pedidos": 44,
+    "dias_sem_pedidos_entre_o_primeiro_e_o_ultimo": 11,
+    "media_pedidos_por_dia_da_semana_seg_a_dom": [
+      1034,
+      1062,
+      1013,
+      1058,
+      1004,
+      1048,
+      1042
+    ],
+    "primeiro_dia": "2022-02-11",
+    "ultimo_dia": "2022-04-06"
+  }
+}
