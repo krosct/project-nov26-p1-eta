@@ -23,19 +23,22 @@ from project_nov26_p1_eta.features import (
 )
 
 RAIZ = Path(__file__).resolve().parents[1]
-SEED = 42
+SEED = 42  # semente fixa
 
 
 def lgbm() -> LGBMRegressor:
+    # Mesmo modelo do train.py, para os números serem comparáveis
     return LGBMRegressor(
         n_estimators=500, learning_rate=0.05, num_leaves=31, random_state=SEED, verbose=-1
     )
 
 
 def main() -> None:
+    # Dados limpos, features, alvo e grupo (ID do entregador)
     df = load_raw(RAIZ / "data/raw/train.csv")
     X, y, g = build_features(df), df[TARGET], df[GROUP]
-    por_id = df.groupby(GROUP)
+    por_id = df.groupby(GROUP)  # um grupo por ID de entregador
+    # Pedidos por dia e média por dia da semana, para achar padrão de dado gerado
     pedidos_dia = df["Order_Date"].value_counts().sort_index()
     dia_semana = pedidos_dia.groupby(pedidos_dia.index.dayofweek).mean().round(0)
 
@@ -53,7 +56,9 @@ def main() -> None:
 
     # A nota carrega informação sobre o tempo além das demais features?
     cv = GroupKFold(n_splits=5)
+    # Previsão fora da amostra de cada pedido, sem usar a nota
     pred_sem = cross_val_predict(lgbm(), X[FEATURES_MODELO], y, groups=g, cv=cv)
+    # Correlação da nota com o tempo e com o erro que o modelo sem nota deixa
     nota = {
         "corr_nota_tempo": round(
             float(df[["Delivery_person_Ratings", TARGET]].corr().iloc[0, 1]), 3
@@ -84,11 +89,13 @@ def main() -> None:
         cv=KFold(5, shuffle=True, random_state=SEED),
         scoring="neg_mean_absolute_error",
     ).mean()
+    # Se agrupar por ID não muda o MAE, o ID não "vaza" nada na validação
     split = {
         "mae_cv_agrupado_por_id": nota["mae_cv_sem_nota"],
         "mae_cv_aleatorio": round(float(aleatorio), 3),
     }
 
+    # Calendário: dias sem pedidos e média por dia da semana
     sinais_sinteticos = {
         "dias_com_pedidos": int(len(pedidos_dia)),
         "dias_sem_pedidos_entre_o_primeiro_e_o_ultimo": int(
@@ -98,6 +105,7 @@ def main() -> None:
         "primeiro_dia": str(pedidos_dia.index.min().date()),
         "ultimo_dia": str(pedidos_dia.index.max().date()),
     }
+    # Junta tudo em um arquivo só, citado no README
     saida = {
         "identidade_do_id": identidade,
         "nota_do_entregador": nota,

@@ -36,14 +36,17 @@ def bruto() -> pd.DataFrame:
 
 
 def test_haversine_mesmo_ponto():
+    # Mesmo ponto: distância zero
     assert haversine_km(0, 0, 0, 0) == 0
 
 
 def test_haversine_um_grau_de_latitude():
+    # 1 grau de latitude vale cerca de 111 km
     assert haversine_km(0, 0, 1, 0) == pytest.approx(111.19, abs=0.1)
 
 
 def test_clean_normaliza_texto_e_alvo(bruto):
+    # Tira espaços, o prefixo "conditions", o "NaN" em texto e o "(min)" do alvo
     df = clean(bruto)
     assert df["Road_traffic_density"].tolist() == ["High", "Jam"]
     assert df["Weatherconditions"].iloc[0] == "Sunny"
@@ -52,6 +55,7 @@ def test_clean_normaliza_texto_e_alvo(bruto):
 
 
 def test_clean_trata_valores_invalidos(bruto):
+    # Coordenada, nota e idade impossíveis viram ausentes
     df = clean(bruto)
     assert df["Restaurant_latitude"].iloc[0] == pytest.approx(22.745049)  # sinal corrigido
     assert np.isnan(df["Restaurant_latitude"].iloc[1])  # coordenada ~0 vira ausente
@@ -60,12 +64,14 @@ def test_clean_trata_valores_invalidos(bruto):
 
 
 def test_build_features_sem_vazamento(bruto):
+    # Só as features previstas; a hora da retirada (que vaza o alvo) fica de fora
     X = build_features(clean(bruto))
     assert list(X.columns) == FEATURES
     assert "Time_Order_picked" not in X.columns
 
 
 def test_build_features_categorias_fixas(bruto):
+    # As categorias são as da lista fixa, na mesma ordem, e a hora vem do pedido
     X = build_features(clean(bruto))
     for col, cats in CATEGORICAS.items():
         assert list(X[col].cat.categories) == cats

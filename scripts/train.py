@@ -40,20 +40,23 @@ from project_nov26_p1_eta.features import (
     build_features,
 )
 
-SEED = 42
-RAIZ = Path(__file__).resolve().parents[1]
+SEED = 42  # semente fixa: mesmos resultados a cada execução
+RAIZ = Path(__file__).resolve().parents[1]  # pasta do projeto
+# Métricas medidas em cada fold da validação cruzada
 METRICAS = ["neg_mean_absolute_error", "neg_root_mean_squared_error", "r2"]
-REAMOSTRAGENS_IC = 2000
+REAMOSTRAGENS_IC = 2000  # reamostragens do bootstrap do intervalo de confiança
 FRACAO_TREINO_TEMPORAL = 0.8  # fração dos DIAS usada no treino do teste temporal
 
 
 def lgbm() -> LGBMRegressor:
+    # Árvores de gradiente: pegam interações e tratam ausentes sozinhas
     return LGBMRegressor(
         n_estimators=500, learning_rate=0.05, num_leaves=31, random_state=SEED, verbose=-1
     )
 
 
 def linear(colunas: list[str]) -> object:
+    # Baseline linear: imputa ausentes, codifica categorias (one-hot) e ajusta a reta
     pre = ColumnTransformer(
         [
             ("num", SimpleImputer(strategy="median"), [c for c in NUMERICAS if c in colunas]),
@@ -91,23 +94,28 @@ EXPERIMENTOS = {
         "sem idade do entregador",
     ),
 }
-FINAL = "lightgbm"
+FINAL = "lightgbm"  # experimento que vira o modelo salvo
 
 
 def main() -> None:
+    # Dados limpos, features, alvo e grupos (entregador) para dividir sem misturar
     df = load_raw(RAIZ / "data/raw/train.csv")
     X, y, grupos = build_features(df), df[TARGET], df[GROUP]
 
+    # Separa 20% de teste final: o mesmo ID nunca fica nos dois lados
     gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=SEED)
     idx_dev, idx_teste = next(gss.split(X, y, grupos))
     X_dev, y_dev, g_dev = X.iloc[idx_dev], y.iloc[idx_dev], grupos.iloc[idx_dev]
     X_teste, y_teste = X.iloc[idx_teste], y.iloc[idx_teste]
+    # Confere a regra acima: nenhum ID em treino e teste ao mesmo tempo
     assert not set(g_dev) & set(grupos.iloc[idx_teste]), "Entregador em treino e teste."
 
+    # MLflow guarda cada experimento num banco local (mlflow.db)
     mlflow.set_tracking_uri(f"sqlite:///{RAIZ / 'mlflow.db'}")
     mlflow.set_experiment("eta-p1")
-    cv = GroupKFold(n_splits=5)
+    cv = GroupKFold(n_splits=5)  # 5 folds, cada ID só aparece em um
     linhas = []
+    # Valida cada experimento por validação cruzada agrupada, só nos 80% de desenvolvimento
     for nome, (modelo, colunas, descricao) in EXPERIMENTOS.items():
         r = cross_validate(modelo, X_dev[colunas], y_dev, groups=g_dev, cv=cv, scoring=METRICAS)
         metricas = {
@@ -116,12 +124,14 @@ def main() -> None:
             "rmse_cv": -r["test_neg_root_mean_squared_error"].mean(),
             "r2_cv": r["test_r2"].mean(),
         }
+        # Registra parâmetros e métricas deste experimento no MLflow
         with mlflow.start_run(run_name=nome):
             mlflow.log_params({"modelo": nome, "descricao": descricao, "n_features": len(colunas)})
             mlflow.log_metrics(metricas)
         linhas.append({"experimento": nome, "descricao": descricao, **metricas})
         print(f"{nome:26} MAE {metricas['mae_cv']:.2f} ± {metricas['mae_cv_std']:.2f}")
 
+    # Treina o modelo final em todo o desenvolvimento e mede UMA vez no teste
     final = lgbm().fit(X_dev[FEATURES_MODELO], y_dev)
     pred = final.predict(X_teste[FEATURES_MODELO])
     teste = {
@@ -129,9 +139,9 @@ def main() -> None:
         "rmse": root_mean_squared_error(y_teste, pred),
         "r2": r2_score(y_teste, pred),
     }
-    # IC95 do MAE por bootstrap dos pedidos do teste (os erros são calculados uma vez)
+    # Erro absoluto de cada pedido, base do MAE e do bootstrap do IC95
     erros = np.abs(y_teste.to_numpy() - pred)
-    rng = np.random.default_rng(SEED)
+    rng = np.random.default_rng(SEED)  # sorteio fixo do bootstrap
     maes = [erros[rng.integers(0, len(erros), len(erros))].mean() for _ in range(REAMOSTRAGENS_IC)]
     teste["mae_ic95"] = [float(v) for v in np.percentile(maes, [2.5, 97.5])]
     # Sensibilidade: mesmo teste, treinando com a nota do entregador
@@ -143,10 +153,10 @@ def main() -> None:
     }
     print(f"Teste final agrupado ({FINAL}): MAE {teste['mae']:.2f} | RMSE {teste['rmse']:.2f}")
 
-    # Teste temporal (out-of-time): treina nos primeiros 80% dos DIAS e testa nos dias seguintes.
-    # O corte é por data (nenhum dia fica dividido); os IDs de entregador se repetem nos dois lados.
+    # Teste temporal: treina nos primeiros 80% dos DIAS e testa nos seguintes (IDs se repetem)
     dias = np.sort(df["Order_Date"].unique())
     data_corte = dias[int(len(dias) * FRACAO_TREINO_TEMPORAL)]
+    # True nos pedidos de antes do corte
     no_treino = (df["Order_Date"] < data_corte).to_numpy()
     modelo_temporal = lgbm().fit(X[FEATURES_MODELO][no_treino], y[no_treino])
     pred_temporal = modelo_temporal.predict(X[FEATURES_MODELO][~no_treino])
@@ -167,12 +177,15 @@ def main() -> None:
         f"MAE {teste_temporal['mae']:.2f} | RMSE {teste_temporal['rmse']:.2f}"
     )
 
+    # Salva o modelo para a API carregar
     (RAIZ / "models").mkdir(exist_ok=True)
     joblib.dump(final, RAIZ / "models/modelo.joblib")
 
+    # Grava a tabela de CV, o resumo do teste e a importância de cada feature
     reports = RAIZ / "reports"
     reports.mkdir(exist_ok=True)
     pd.DataFrame(linhas).round(3).to_csv(reports / "resultados_cv.csv", index=False)
+    # Ganho de cada feature nas árvores, normalizado para somar 1
     importancia = pd.Series(final.booster_.feature_importance("gain"), index=FEATURES_MODELO)
     resumo = {
         "modelo_final": FINAL,
