@@ -133,8 +133,8 @@ def main() -> None:
 
     # Treina o modelo final em todo o desenvolvimento e mede UMA vez no teste
     final = lgbm().fit(X_dev[FEATURES_MODELO], y_dev)
-    pred = final.predict(X_teste[FEATURES_MODELO])
-    teste = {
+    pred = np.asarray(final.predict(X_teste[FEATURES_MODELO]), dtype=float)
+    teste: dict[str, float | list[float]] = {
         "mae": mean_absolute_error(y_teste, pred),
         "rmse": root_mean_squared_error(y_teste, pred),
         "r2": r2_score(y_teste, pred),
@@ -145,7 +145,7 @@ def main() -> None:
     maes = [erros[rng.integers(0, len(erros), len(erros))].mean() for _ in range(REAMOSTRAGENS_IC)]
     teste["mae_ic95"] = [float(v) for v in np.percentile(maes, [2.5, 97.5])]
     # Sensibilidade: mesmo teste, treinando com a nota do entregador
-    com_nota = lgbm().fit(X_dev, y_dev).predict(X_teste)
+    com_nota = np.asarray(lgbm().fit(X_dev, y_dev).predict(X_teste), dtype=float)
     teste_com_nota = {
         "mae": mean_absolute_error(y_teste, com_nota),
         "rmse": root_mean_squared_error(y_teste, com_nota),
@@ -159,7 +159,7 @@ def main() -> None:
     # True nos pedidos de antes do corte
     no_treino = (df["Order_Date"] < data_corte).to_numpy()
     modelo_temporal = lgbm().fit(X[FEATURES_MODELO][no_treino], y[no_treino])
-    pred_temporal = modelo_temporal.predict(X[FEATURES_MODELO][~no_treino])
+    pred_temporal = np.asarray(modelo_temporal.predict(X[FEATURES_MODELO][~no_treino]), dtype=float)
     y_t = y[~no_treino]
     teste_temporal = {
         "mae": mean_absolute_error(y_t, pred_temporal),

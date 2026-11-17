@@ -4,9 +4,10 @@ Executar: uv run uvicorn project_nov26_p1_eta.api:app
 """
 
 import os
+from collections.abc import Sequence
 from datetime import date, time
 from functools import lru_cache
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Protocol
 
 import joblib
 import pandas as pd
@@ -45,6 +46,10 @@ class Pedido(BaseModel):
 class Previsao(BaseModel):
     # Saída da API: tempo previsto em minutos
     eta_min: float
+
+
+class Modelo(Protocol):
+    def predict(self, X: pd.DataFrame) -> Sequence[float]: ...
 
 
 def pedido_para_dataframe(pedido: Pedido) -> pd.DataFrame:
@@ -87,7 +92,7 @@ def health() -> dict:
 
 
 @app.post("/predict", response_model=Previsao)
-def predict(pedido: Pedido, model: Annotated[object, Depends(get_model)]) -> Previsao:
+def predict(pedido: Pedido, model: Annotated[Modelo, Depends(get_model)]) -> Previsao:
     # Mesma função de features do treino, só com as colunas que o modelo usa
     X = build_features(pedido_para_dataframe(pedido))[FEATURES_MODELO]
     return Previsao(eta_min=round(float(model.predict(X)[0]), 1))
