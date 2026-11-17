@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+roadmap-descomplica.md
 
 # ===== Python / uv =====
 __pycache__/
@@ -27,7 +28,7 @@ data/*
 !data/README.md
 
 # ===== Modelos e checkpoints =====
-models/
+models/*
 checkpoints/
 *.pt
 *.pth
@@ -36,6 +37,7 @@ checkpoints/
 *.bin
 *.onnx
 *.joblib
+!models/modelo.joblib
 *.pkl
 
 # ===== Experimentos e logs =====
