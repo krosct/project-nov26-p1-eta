@@ -57,7 +57,7 @@ def main() -> None:
     # A nota carrega informação sobre o tempo além das demais features?
     cv = GroupKFold(n_splits=5)
     # Previsão fora da amostra de cada pedido, sem usar a nota
-    pred_sem = cross_val_predict(lgbm(), X[FEATURES_MODELO], y, groups=g, cv=cv)
+    pred_sem = cross_val_predict(lgbm(), X[FEATURES_MODELO], y, groups=g, cv=cv)  # pyright: ignore[reportArgumentType]
     # Correlação da nota com o tempo e com o erro que o modelo sem nota deixa
     nota = {
         "corr_nota_tempo": round(
@@ -70,7 +70,12 @@ def main() -> None:
         "mae_cv_com_nota": round(
             float(
                 -cross_val_score(
-                    lgbm(), X[FEATURES], y, groups=g, cv=cv, scoring="neg_mean_absolute_error"
+                    lgbm(),
+                    X[FEATURES],
+                    y,
+                    groups=g,
+                    cv=cv,
+                    scoring="neg_mean_absolute_error",  # pyright: ignore[reportArgumentType]
                 ).mean()
             ),
             3,
@@ -83,7 +88,7 @@ def main() -> None:
 
     # Agrupar por ID importa? Compara com um split aleatório (mesmo modelo, mesmas features)
     aleatorio = -cross_val_score(
-        lgbm(),
+        lgbm(),  # pyright: ignore[reportArgumentType]
         X[FEATURES_MODELO],
         y,
         cv=KFold(5, shuffle=True, random_state=SEED),
